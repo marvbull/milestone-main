@@ -96,5 +96,7 @@ if __name__ == "__main__":
     p_dial.join()
     p_safety.join()
 
-    print("System beendet")
+    print("System beendet sehr gut ")
+    
+    #halloooasdsa
 
