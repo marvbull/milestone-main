@@ -1,15 +1,31 @@
-import i2c
+from i2c import bus
 import time
 
-def moveRobo(addr, befehl):
-    i2c.write_byte(addr, befehl)
-    
-    while True:
-        status = i2c.read_byte(addr)
-        if status is None:
-            time.sleep(0.2)
-            continue
+COMMANDS = {
+    1: "Roboter: move A",
+    2: "Roboter: move B",
+    10: "Drehteller: nach links drehen",
+    11: "Drehteller: nach rechts drehen",
+    20: "Roboter: kalibrieren",
+    99: "System: STOP"
+}
 
-        if status in [10, 20]:
-            return status
-        time.sleep(0.2)
+RECEIVE = {
+    10: "Roboter: Bewegung A abgeschlossen",
+    11: "Roboter: Bewegung B abgeschlossen",
+    20: "Drehteller: Drehung abgeschlossen",
+    255: "Fehler"
+}
+
+def moveRobo(addr, befehl):
+    try:
+        print(f"Sende Befehl {befehl} → {COMMANDS.get(befehl, 'unbekannt')}")
+        bus.write_byte(addr, befehl)
+
+        # Antwort vom Arduino (z. B. wenn Bewegung fertig)
+        rueck = bus.read_byte(addr)
+        print(f"Antwort {rueck} → {RECEIVE.get(rueck, 'unbekannt')}")
+        return rueck
+    except Exception as e:
+        print("I2C-Fehler:", e)
+        return None
