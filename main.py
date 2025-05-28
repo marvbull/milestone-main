@@ -75,7 +75,7 @@ if __name__ == "__main__":
                 if signal == "start":
                     print("Prozess gestartet")
 
-                    queue_dreh.put(1)                      # Drehteller-Befehl senden
+                    #queue_dreh.put(1)                      # Drehteller-Befehl senden
                     time.sleep(2)                          # Kurze Wartezeit, damit Reihenfolge stimmt
 
                     queue_robo.put(1)                      # Roboter-Befehl senden
