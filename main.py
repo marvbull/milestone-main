@@ -5,7 +5,16 @@ import RPi.GPIO as GPIO
 
 import i2c
 import arduino
-import constants
+from constants import(
+    TURNTABLE_ADDR,  # I2C-Adresse des Drehtellers
+    ROBO_ADDR,      # I2C-Adresse des Roboterarms
+    M5DIAL_ADDR,     # I2C-Adresse des M5Dial
+
+    ROBO_MOVE_A,
+    ROBO_MOVE_B,
+    CMD_CALIBRATE,
+    CMD_STOP
+)
 
 # Prozess: Eingabe vom M5Dial simulieren
 def workerDial(dial_queue, shutdown_event):
@@ -22,7 +31,7 @@ def workerDrehteller(queue, shutdown_event):
         if not queue.empty():                      # Gibt es einen neuen Befehl?
             befehl = queue.get()                   # Befehl abrufen
             print("Drehteller erhält Befehl:", befehl)
-            arduino.moveRobo(0x09, befehl)         # I2C-Adresse des Drehtellers: 0x09
+            arduino.moveRobo(TURNTABLE_ADDR, befehl)         # I2C-Adresse des Drehtellers: 0x09
             print("Drehteller fertig")             # Rückmeldung
         time.sleep(0.1)                            # Kleine Pause zur CPU-Entlastung
 
@@ -32,14 +41,14 @@ def workerRobo(queue, shutdown_event):
         if not queue.empty():                      # Gibt es einen neuen Befehl?
             befehl = queue.get()                   # Befehl abrufen
             print("Roboterarm erhält Befehl:", befehl)
-            arduino.moveRobo(0x08, befehl)         # I2C-Adresse des Roboterarms: 0x08
+            arduino.moveRobo(ROBO_ADDR, befehl)         # I2C-Adresse des Roboterarms: 0x08
             print("Roboterarm fertig")             # Rückmeldung
         time.sleep(0.1)
 
 # Prozess: Not-Aus überwachen (hier simuliert)
 def workerSafety(shutdown_event):
     while True:
-        time.sleep(30)                             # Simulation: Not-Aus nach 30 Sekunden
+        time.sleep(120)                             # Simulation: Not-Aus nach 30 Sekunden
         print("Not-Aus ausgelöst")
         shutdown_event.set()                       # Signal an alle Prozesse zum Stoppen
         break
@@ -72,11 +81,9 @@ if __name__ == "__main__":
                 signal = dial_queue.get()                  # Signal auslesen
                 if signal == "start":
                     print("Prozess gestartet")
+                        # Kurze Wartezeit, damit Reihenfolge stimmt
 
-                    queue_dreh.put(1)                      # Drehteller-Befehl senden
-                    time.sleep(20)                          # Kurze Wartezeit, damit Reihenfolge stimmt
-
-                    queue_robo.put(1)                      # Roboter-Befehl senden
+                    queue_robo.put(ROBO_MOVE_A)                      # Roboter-Befehl senden
 
             time.sleep(0.2)                                # Entlastung Hauptloop
 
