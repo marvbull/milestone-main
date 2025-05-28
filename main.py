@@ -44,10 +44,6 @@ def workerSafety(shutdown_event):
     
 i2c.init_i2c()  # ← ganz wichtig: das muss VORHER kommen!
 
-i2c.write_byte(0x08, 42)
-antwort = i2c.read_byte(0x08)
-print("Antwort vom Arduino:", antwort)
-
 if __name__ == "__main__":
     # Queues zur Kommunikation mit den Prozessen
     queue_robo = multiprocessing.Queue()           # Befehle für Roboter
