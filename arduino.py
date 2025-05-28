@@ -1,21 +1,6 @@
 from i2c import bus
 import time
-
-COMMANDS = {
-    1: "Roboter: move A",
-    2: "Roboter: move B",
-    10: "Drehteller: nach links drehen",
-    11: "Drehteller: nach rechts drehen",
-    20: "Roboter: kalibrieren",
-    99: "System: STOP"
-}
-
-RECEIVE = {
-    10: "Roboter: Bewegung A abgeschlossen",
-    11: "Roboter: Bewegung B abgeschlossen",
-    20: "Drehteller: Drehung abgeschlossen",
-    255: "Fehler"
-}
+import constants
 
 def moveRobo(addr, befehl):
     try:

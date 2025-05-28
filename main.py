@@ -1,9 +1,11 @@
 import multiprocessing
-import i2c
-import arduino
 import time
 import os
 import RPi.GPIO as GPIO
+
+import i2c
+import arduino
+import constants
 
 # Prozess: Eingabe vom M5Dial simulieren
 def workerDial(dial_queue, shutdown_event):
