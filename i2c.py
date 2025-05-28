@@ -23,3 +23,8 @@ def read_byte(addr):
 def close_i2c():
     if bus:
         bus.close()
+        
+#import i2c
+#i2c.init_i2c()
+#i2c.write_byte(0x08, 42)
+#value = i2c.read_byte(0x08)
