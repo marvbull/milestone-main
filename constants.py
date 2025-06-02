@@ -3,12 +3,12 @@ M5DIAL_ADDR = 0x07
 ROBO_ADDR = 0x08
 TURNTABLE_ADDR = 0x09
 
-# Befehle
+# Befehle (Base ist immer + Stückzahl)
 DIAL_START = 0 # Start des Produktionsprozesses
-ROBO_MOVE_A = 1 # Montage des Bandes
-ROBO_MOVE_B = 2 # Ausgabe des ASM
-TURN_MOVE_ASM = 3 # Platten aufeinanderstacken
-TURN_MOVE_SND = 4 # Solanoid auf
+ROBO_MOVE_A = 10 # Montage des Bandes
+ROBO_MOVE_B = 20 # Ausgabe des ASM
+TURN_MOVE_ASM = 30 # Platten aufeinanderstacken
+TURN_MOVE_SND = 40 # Solanoid auf
 
 CMD_CALIBRATE = 90 # init
 CMD_STOP = 99 # Stoo über I2C
