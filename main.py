@@ -1,98 +1,183 @@
 import multiprocessing
 import time
-import os
+import smbus
 import RPi.GPIO as GPIO
 
 import i2c
 import arduino
-from constants import(
-    TURNTABLE_ADDR,  # I2C-Adresse des Drehtellers
-    ROBO_ADDR,      # I2C-Adresse des Roboterarms
-    M5DIAL_ADDR,     # I2C-Adresse des M5Dial
-
+from constants import (
+    TURNTABLE_ADDR,
+    ROBO_ADDR,
+    M5DIAL_ADDR,
     ROBO_MOVE_A,
     ROBO_MOVE_B,
+    TURN_MOVE_ASM,
+    TURN_MOVE_SND,
     CMD_CALIBRATE,
-    CMD_STOP
+    CMD_STOP,
+    RESP_DONE_ROBO_A,
+    RESP_DONE_ROBO_B,
+    RESP_DONE_TURN_ASM,
+    RESP_DONE_TURN_SND,
+    RESP_ERROR
 )
 
-# Prozess: Eingabe vom M5Dial simulieren
+bus = smbus.SMBus(1)  # I2C-Bus
+NOTAUS_PIN = 17       # GPIO17 (physikalisch Pin 11)
+
+# Dial-Prozess: Simuliert Startsignal
 def workerDial(dial_queue, shutdown_event):
-    while not shutdown_event.is_set():  # Solange kein Not-Aus
-        print("Warte auf Startsignal vom M5Dial...")
-        time.sleep(5)                   # Simulation: Startsignal alle 5 Sekunden
+    while not shutdown_event.is_set():
+        print("Warte auf Startsignal vom M5Dial")
+        time.sleep(5)
         print("Startsignal empfangen")
-        dial_queue.put("start")         # "start" wird an Hauptprozess übermittelt
-        time.sleep(10)                  # Warten, damit nicht mehrfach gestartet wird
+        dial_queue.put("start")
+        time.sleep(10)
 
-# Prozess: Drehteller-Befehle empfangen und ausführen
+# Drehteller-Prozess
 def workerDrehteller(queue, shutdown_event):
-    while not shutdown_event.is_set():
-        if not queue.empty():                      # Gibt es einen neuen Befehl?
-            befehl = queue.get()                   # Befehl abrufen
-            print("Drehteller erhält Befehl:", befehl)
-            arduino.moveRobo(TURNTABLE_ADDR, befehl)         # I2C-Adresse des Drehtellers: 0x09
-            print("Drehteller fertig")             # Rückmeldung
-        time.sleep(0.1)                            # Kleine Pause zur CPU-Entlastung
+    try:
+        while not shutdown_event.is_set():
+            if not queue.empty():
+                befehl = queue.get()
+                print("Drehteller erhält Befehl:", befehl)
+                arduino.moveRobo(TURNTABLE_ADDR, befehl)
+                print("Drehteller-Befehl ausgeführt")
+            time.sleep(0.1)
+    finally:
+        print("Not-Aus erkannt - sende STOP an Drehteller")
+        try:
+            arduino.moveRobo(TURNTABLE_ADDR, CMD_STOP)
+        except Exception as e:
+            print(f"Fehler beim STOP an Drehteller: {e}")
 
-# Prozess: Roboterarm-Befehle empfangen und ausführen
+# Roboter-Prozess
 def workerRobo(queue, shutdown_event):
-    while not shutdown_event.is_set():
-        if not queue.empty():                      # Gibt es einen neuen Befehl?
-            befehl = queue.get()                   # Befehl abrufen
-            print("Roboterarm erhält Befehl:", befehl)
-            arduino.moveRobo(ROBO_ADDR, befehl)         # I2C-Adresse des Roboterarms: 0x08
-            print("Roboterarm fertig")             # Rückmeldung
-        time.sleep(0.1)
+    try:
+        while not shutdown_event.is_set():
+            if not queue.empty():
+                befehl = queue.get()
+                print("Roboterarm erhält Befehl:", befehl)
+                arduino.moveRobo(ROBO_ADDR, befehl)
+                print("Roboterarm-Befehl ausgeführt")
+            time.sleep(0.1)
+    finally:
+        print("Not-Aus erkannt - sende STOP an Roboterarm")
+        try:
+            arduino.moveRobo(ROBO_ADDR, CMD_STOP)
+        except Exception as e:
+            print(f"Fehler beim STOP an Roboterarm: {e}")
 
-# Prozess: Not-Aus überwachen (hier simuliert)
+# ECHTER Not-Aus an GPIO17
 def workerSafety(shutdown_event):
-    while True:
-        time.sleep(120)                             # Simulation: Not-Aus nach 30 Sekunden
-        print("Not-Aus ausgelöst")
-        shutdown_event.set()                       # Signal an alle Prozesse zum Stoppen
-        break
-    
-i2c.init_i2c()  # ← ganz wichtig: das muss VORHER kommen!
+    GPIO.setmode(GPIO.BCM)
+    GPIO.setup(NOTAUS_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+    print("Überwache echten Not-Aus an GPIO17")
+
+    try:
+        while not shutdown_event.is_set():
+            if GPIO.input(NOTAUS_PIN) == GPIO.HIGH:
+                print("Not-Aus AUSGELÖST (Taste gedrückt)")
+                shutdown_event.set()
+                break
+            time.sleep(0.1)
+    finally:
+        GPIO.cleanup(NOTAUS_PIN)
+
+# I2C initialisieren
+i2c.init_i2c()
 
 if __name__ == "__main__":
-    # Queues zur Kommunikation mit den Prozessen
-    queue_robo = multiprocessing.Queue()           # Befehle für Roboter
-    queue_dreh = multiprocessing.Queue()           # Befehle für Drehteller
-    dial_queue = multiprocessing.Queue()           # Startsignal vom M5Dial
-    shutdown_event = multiprocessing.Event()       # Globales Event für Not-Aus
+    queue_robo = multiprocessing.Queue()
+    queue_dreh = multiprocessing.Queue()
+    dial_queue = multiprocessing.Queue()
+    shutdown_event = multiprocessing.Event()
 
-    # Prozesse erstellen
     p_robo = multiprocessing.Process(target=workerRobo, args=(queue_robo, shutdown_event))
     p_dreh = multiprocessing.Process(target=workerDrehteller, args=(queue_dreh, shutdown_event))
     p_dial = multiprocessing.Process(target=workerDial, args=(dial_queue, shutdown_event))
     p_safety = multiprocessing.Process(target=workerSafety, args=(shutdown_event,))
 
-    # Prozesse starten
     p_robo.start()
     p_dreh.start()
     p_dial.start()
     p_safety.start()
 
     try:
-        # Ablaufsteuerung im Hauptprozess
         while not shutdown_event.is_set():
-            if not dial_queue.empty():                     # Wurde Startsignal vom Dial empfangen?
-                signal = dial_queue.get()                  # Signal auslesen
+            if not dial_queue.empty():
+                signal = dial_queue.get()
                 if signal == "start":
                     print("Prozess gestartet")
-                        # Kurze Wartezeit, damit Reihenfolge stimmt
 
-                    queue_robo.put(ROBO_MOVE_A)                      # Roboter-Befehl senden
+                    # Schritt 1: Drehteller ASM
+                    queue_dreh.put(TURN_MOVE_ASM)
+                    print("Warte auf Rückmeldung vom Drehteller (ASM)...")
 
-            time.sleep(0.2)                                # Entlastung Hauptloop
+                    while not shutdown_event.is_set():
+                        try:
+                            response = bus.read_byte(TURNTABLE_ADDR)
+                            if response == RESP_DONE_TURN_ASM:
+                                print("Drehteller ASM abgeschlossen.")
+                                break
+                            elif response == RESP_ERROR:
+                                print("Fehler vom Drehteller!")
+                                shutdown_event.set()
+                                break
+                        except Exception as e:
+                            print(f"I2C-Lesefehler Drehteller: {e}")
+                        time.sleep(0.2)
+
+                    if shutdown_event.is_set():
+                        break
+
+                    # Schritt 2: Roboter MOVE_A
+                    queue_robo.put(ROBO_MOVE_A)
+                    print("Warte auf Rückmeldung vom Roboter...")
+
+                    while not shutdown_event.is_set():
+                        try:
+                            response = bus.read_byte(ROBO_ADDR)
+                            if response == RESP_DONE_ROBO_A:
+                                print("Roboter MOVE_A abgeschlossen.")
+                                break
+                            elif response == RESP_ERROR:
+                                print("Fehler vom Roboter!")
+                                shutdown_event.set()
+                                break
+                        except Exception as e:
+                            print(f"I2C-Lesefehler Roboter: {e}")
+                        time.sleep(0.2)
+
+                    if shutdown_event.is_set():
+                        break
+
+                    # Schritt 3: Drehteller SND
+                    queue_dreh.put(TURN_MOVE_SND)
+                    print("TURN_MOVE_SND an Drehteller gesendet. Warte auf Bestätigung...")
+
+                    while not shutdown_event.is_set():
+                        try:
+                            response = bus.read_byte(TURNTABLE_ADDR)
+                            if response == RESP_DONE_TURN_SND:
+                                print("Drehteller meldet SND abgeschlossen.")
+                                break
+                            elif response == RESP_ERROR:
+                                print("Fehler beim SND vom Drehteller!")
+                                shutdown_event.set()
+                                break
+                        except Exception as e:
+                            print(f"I2C-Lesefehler Drehteller (SND): {e}")
+                        time.sleep(0.2)
+
+            time.sleep(0.2)
 
     except KeyboardInterrupt:
-        shutdown_event.set()                               # Bei STRG+C Not-Aus setzen
+        shutdown_event.set()
 
     print("Stoppe alle Prozesse...")
 
-    # Alle Prozesse ordentlich beenden
+    # Prozesse beenden
     p_robo.terminate()
     p_dreh.terminate()
     p_dial.terminate()
@@ -103,4 +188,4 @@ if __name__ == "__main__":
     p_dial.join()
     p_safety.join()
 
-    print("System beende")
+    print("System beendet.")
