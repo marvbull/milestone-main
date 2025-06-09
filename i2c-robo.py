@@ -15,9 +15,24 @@ def send_command(value):
 def request_status():
     try:
         status = bus.read_byte(I2C_ADDR)
-        print(f"← Status vom Arduino: {status}")
+        print(f"← Rohstatus vom Arduino: {status}")
+        interpret_status(status)
     except Exception as e:
         print(f"Fehler beim Empfangen: {e}")
+
+def interpret_status(status):
+    if status == 1:
+        print("🟢 Arduino bereit oder in Bewegung.")
+    elif status == 10:
+        print("✅ Move A abgeschlossen.")
+    elif status == 20:
+        print("✅ Move Test abgeschlossen.")
+    elif status == 90:
+        print("✅ Init abgeschlossen.")
+    elif status == 99:
+        print("⛔ NOTAUS erkannt.")
+    else:
+        print(f"⚠️ Unbekannter Statuscode: {status}")
 
 def main():
     print("I2C-Steuerung bereit.")
@@ -36,9 +51,9 @@ def main():
             except ValueError:
                 print("Ungültige Zahl.")
         elif cmd == "init":
-            send_command(2)
+            send_command(90)
         elif cmd == "test":
-            send_command(30)
+            send_command(20)
         elif cmd == "stop":
             send_command(99)
         elif cmd == "cont":

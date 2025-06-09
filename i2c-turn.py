@@ -1,14 +1,13 @@
 import smbus
 import time
 
-# I2C-Adresse des Arduino (laut Wire.begin(0x09))
-I2C_ADDR = 0x09
-bus = smbus.SMBus(1)  # Bus 1 ist Standard auf dem Raspberry Pi
+I2C_ADDR = 0x09  # I2C-Adresse des Arduino
+bus = smbus.SMBus(1)  # I2C-Bus des Raspberry Pi
 
 def send_command(value):
     try:
         bus.write_byte(I2C_ADDR, value)
-        print(f"→ Gesendet: {value}")
+        print(f"→ Befehl gesendet: {value}")
     except Exception as e:
         print(f"Fehler beim Senden: {e}")
 
@@ -16,31 +15,24 @@ def request_status():
     try:
         status = bus.read_byte(I2C_ADDR)
         print(f"← Status vom Arduino: {status}")
+        return status
     except Exception as e:
         print(f"Fehler beim Empfangen: {e}")
+        return -1
 
 def main():
-    print("I2C-Terminal für Arduino (Adresse 0x09)")
-    print("Befehle: a [1-10], init, test, snd, stop, cont, status, exit")
+    print("I²C-Steuerung bereit.")
+    print("Befehle: cal, asm, snd, stop, cont, status, exit")
 
     while True:
         cmd = input(">>> ").strip().lower()
 
-        if cmd.startswith("a "):
-            try:
-                num = int(cmd.split()[1])
-                if 1 <= num <= 10:
-                    send_command(9 + num)  # 10 bis 19
-                else:
-                    print("Nur Werte 1–10 erlaubt.")
-            except ValueError:
-                print("Ungültige Eingabe.")
-        elif cmd == "init":
-            send_command(90)  # moveCAL
-        elif cmd == "test":
-            send_command(30)  # moveASM
+        if cmd == "cal":
+            send_command(90)
+        elif cmd == "asm":
+            send_command(30)
         elif cmd == "snd":
-            send_command(40)  # moveSND
+            send_command(40)
         elif cmd == "stop":
             send_command(99)
         elif cmd == "cont":
@@ -48,10 +40,13 @@ def main():
         elif cmd == "status":
             request_status()
         elif cmd == "exit":
-            print("Beendet.")
             break
         else:
-            print("Unbekannter Befehl. Verwende: a [1-10], init, test, snd, stop, cont, status, exit")
+            print("Unbekannter Befehl.")
+
+        # Automatisch Rückmeldung abfragen
+        time.sleep(0.5)
+        request_status()
 
 if __name__ == "__main__":
     main()
