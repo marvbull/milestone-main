@@ -1,35 +1,54 @@
 import smbus
 import time
 
-I2C_ADDR = 0x08  # Adresse des Arduino
-bus = smbus.SMBus(1)  # SMBus 1 für Raspberry Pi
+# I2C-Adresse des Arduino
+I2C_ADDR = 0x08
+bus = smbus.SMBus(1)  # Bei Raspberry Pi ist Bus 1 üblich
 
-def send_command(cmd):
+def send_command(value):
     try:
-        print(f"Sende I2C-Befehl: {cmd}")
-        bus.write_byte(I2C_ADDR, cmd)
-        time.sleep(0.1)
-        response = bus.read_byte(I2C_ADDR)
-        print(f"Antwort vom Arduino: {response}")
+        bus.write_byte(I2C_ADDR, value)
+        print(f"→ Gesendet: {value}")
     except Exception as e:
-        print(f"Fehler bei I2C: {e}")
+        print(f"Fehler beim Senden: {e}")
+
+def request_status():
+    try:
+        status = bus.read_byte(I2C_ADDR)
+        print(f"← Status vom Arduino: {status}")
+    except Exception as e:
+        print(f"Fehler beim Empfangen: {e}")
 
 def main():
-    print("Gib eine Zahl von 10–19 ein (Band 1–10).")
-    print("Oder andere bekannte Kommandos wie 2 (moveB), 30 (moveTest).")
+    print("I2C-Steuerung bereit.")
+    print("Befehle: a [1-10], init, test, stop, cont, status, exit")
 
     while True:
-        try:
-            raw_input = input("Befehl senden (q zum Beenden): ").strip()
-            if raw_input.lower() == "q":
-                break
-            cmd = int(raw_input)
-            send_command(cmd)
-        except ValueError:
-            print("Ungültige Eingabe. Bitte eine Zahl eingeben.")
-        except KeyboardInterrupt:
-            print("\nBeendet.")
+        cmd = input(">>> ").strip().lower()
+
+        if cmd.startswith("a "):
+            try:
+                num = int(cmd.split()[1])
+                if 1 <= num <= 10:
+                    send_command(9 + num)  # 10–19 für moveA1–10
+                else:
+                    print("Nur Werte 1–10 erlaubt.")
+            except ValueError:
+                print("Ungültige Zahl.")
+        elif cmd == "init":
+            send_command(2)
+        elif cmd == "test":
+            send_command(30)
+        elif cmd == "stop":
+            send_command(99)
+        elif cmd == "cont":
+            send_command(98)
+        elif cmd == "status":
+            request_status()
+        elif cmd == "exit":
             break
+        else:
+            print("Unbekannter Befehl.")
 
 if __name__ == "__main__":
     main()
