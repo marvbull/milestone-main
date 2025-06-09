@@ -13,8 +13,9 @@ ROBO_MOVE_A = 10
 
 CMD_CONTINUE = 98
 DIAL_START = 1
-ROBO_IDLE = 105
-TURN_IDLE = 125
+DONE_1 = 105
+DONE_2 = 115
+DONE_3 = 125
 
 NOTAUS_PIN = 17
 bus = smbus.SMBus(1)
@@ -44,7 +45,7 @@ def wait_for_idle(addr, idle_value, name):
                 return
         except Exception as e:
             print(f"[{name}] Fehler beim Lesen: {e}")
-        time.sleep(0.2)
+        time.sleep(3)
 
 def wait_for_continue():
     print("[System] Warte auf CONTINUE über M5Dial...")
@@ -56,7 +57,7 @@ def wait_for_continue():
                 return
         except:
             pass
-        time.sleep(0.5)
+        time.sleep(3)
 
 def main():
     init_gpio()
@@ -81,13 +82,13 @@ def main():
                     print(f"[System] Starte Bearbeitung für Stück {stueck}")
 
                     send_command(TURNTABLE_ADDR, TURN_MOVE_ASM, "Drehteller ASM")
-                    wait_for_idle(TURNTABLE_ADDR, TURN_IDLE, "Drehteller ASM")
+                    wait_for_idle(TURNTABLE_ADDR, DONE_1, "Drehteller ASM")
 
                     send_command(ROBO_ADDR, ROBO_MOVE_A, "Roboter MOVE_A")
-                    wait_for_idle(ROBO_ADDR, ROBO_IDLE, "Roboter MOVE_A")
+                    wait_for_idle(ROBO_ADDR, DONE_2, "Roboter MOVE_A")
 
                     send_command(TURNTABLE_ADDR, TURN_MOVE_SND, "Drehteller SND")
-                    wait_for_idle(TURNTABLE_ADDR, TURN_IDLE, "Drehteller SND")
+                    wait_for_idle(TURNTABLE_ADDR, DONE_3, "Drehteller SND")
 
                 print("[System] Ablauf abgeschlossen.")
 
