@@ -19,7 +19,9 @@ from constants import (
     RESP_DONE_ROBO_A,
     RESP_DONE_TURN_ASM,
     RESP_DONE_TURN_SND,
-    RESP_ERROR
+    RESP_ERROR,
+    ROBO_IDLE,
+    TURN_IDLE
 )
 
 bus = smbus.SMBus(1)
@@ -81,6 +83,9 @@ def wait_for_response(addr, expected_response, label):
             print(f"[{label}] Antwort von {hex(addr)}: {r}")
             if r == expected_response:
                 print(f"[{label}] abgeschlossen.")
+                return True
+            elif (addr == ROBO_ADDR and r == ROBO_IDLE) or (addr == TURNTABLE_ADDR and r == TURN_IDLE):
+                print(f"[{label}] abgeschlossen mit IDLE.")
                 return True
             elif r == RESP_ERROR:
                 print(f"[{label}] Fehler gemeldet!")
