@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 import smbus
 import time
 import RPi.GPIO as GPIO
@@ -72,13 +73,14 @@ def monitor_m5dial():
                 pause_flag.set()
                 send_command(ROBO_ADDR, CMD_STOP, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_STOP, "Drehteller")
+                send_command(M5DIAL_ADDR, CMD_CONTINUE, "M5Dial (Bestätigung)")
 
             elif status == CMD_CONTINUE and pause_flag.is_set():
                 print("[M5Dial] CONTINUE erkannt – fortsetzen")
                 pause_flag.clear()
                 send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
-                time.delay(1)
+                time.sleep(1)
                 send_command(ROBO_ADDR, CMD_CAL, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_CAL, "Drehteller")
 
@@ -121,7 +123,7 @@ def main():
         print("[Init] NOT-AUS nicht aktiv – sende CONTINUE")
         send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
         send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
-        time.delay(1)
+        time.sleep(1)
         send_command(ROBO_ADDR, CMD_CAL, "Roboter")
         send_command(TURNTABLE_ADDR, CMD_CAL, "Drehteller")
 
