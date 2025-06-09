@@ -1,13 +1,14 @@
 from smbus2 import SMBus
 import time
 
-I2C_ADDR = 0x09  # Adresse des Arduino
+I2C_ADDR = 0x09  # Arduino I2C-Adresse
 
 # Befehle als Bytewerte
 commands = {
     "moveasm": 30,
     "movesnd": 40,
     "movecal": 90,
+    "movetest": 3,
     "stop": 99,
     "continue": 98
 }
@@ -28,7 +29,7 @@ def read_status(bus):
 
 def main():
     with SMBus(1) as bus:
-        print("I2C-Terminal gestartet. Eingabe: moveasm / movesnd / movecal / stop / continue / status / exit")
+        print("I2C-Terminal gestartet. Eingabe: moveasm / movesnd / movecal / movetest / stop / continue / status / exit")
         while True:
             user_input = input(">> ").strip().lower()
             if user_input == "exit":
