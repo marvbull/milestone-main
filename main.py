@@ -121,6 +121,9 @@ def main():
         print("[Init] NOT-AUS nicht aktiv – sende CONTINUE")
         send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
         send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
+        time.delay(1)
+        send_command(ROBO_ADDR, CMD_CAL, "Roboter")
+        send_command(TURNTABLE_ADDR, CMD_CAL, "Drehteller")
 
     # Hintergrundthreads starten
     threading.Thread(target=monitor_m5dial, daemon=True).start()
