@@ -78,6 +78,9 @@ def monitor_m5dial():
                 pause_flag.clear()
                 send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
+                time.delay(1)
+                send_command(ROBO_ADDR, CMD_CAL, "Roboter")
+                send_command(TURNTABLE_ADDR, CMD_CAL, "Drehteller")
 
             elif status == DIAL_START and not start_flag.is_set():
                 print("[M5Dial] START erkannt – Ablauf starten")
