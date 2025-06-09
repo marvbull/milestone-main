@@ -9,8 +9,13 @@ DIAL_START = 1 # Start des Produktionsprozesses
 DIAL_STOP = 2 # Stop des Produktionsprozesses
 DIAL_QUIT = 3 # Quitieren des Programmes
 
+ROBO_BUSY = 4
+ROBO_IDLE = 5
 ROBO_MOVE_A = 10 # Montage des Bandes
 ROBO_MOVE_TEST = 20 # Ausgabe des ASM
+
+TURN_BUSY = 24
+TURN_IDLE = 25
 TURN_MOVE_ASM = 30 # Platten aufeinanderstacken
 TURN_MOVE_SND = 40 # Solanoid auf
 
