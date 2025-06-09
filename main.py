@@ -1,3 +1,4 @@
+
 import multiprocessing
 import time
 import smbus
@@ -6,60 +7,92 @@ import RPi.GPIO as GPIO
 import i2c
 import arduino
 from constants import (
-    TURNTABLE_ADDR, ROBO_ADDR, M5DIAL_ADDR,
-    ROBO_MOVE_A, TURN_MOVE_ASM, TURN_MOVE_SND,
-    CMD_STOP, RESP_DONE_ROBO_A, RESP_DONE_TURN_ASM, RESP_DONE_TURN_SND,
+    TURNTABLE_ADDR,
+    ROBO_ADDR,
+    M5DIAL_ADDR,
+    ROBO_MOVE_A,
+    TURN_MOVE_ASM,
+    TURN_MOVE_SND,
+    CMD_CALIBRATE,
+    CMD_STOP,
+    CMD_CONTINUE,
+    DIAL_START,
+    RESP_DONE_ROBO_A,
+    RESP_DONE_TURN_ASM,
+    RESP_DONE_TURN_SND,
     RESP_ERROR
 )
 
 bus = smbus.SMBus(1)
 NOTAUS_PIN = 17
 
+# Statusflags
+pause_flag = multiprocessing.Value('b', False)
+
 def workerDial(dial_queue, shutdown_event):
     while not shutdown_event.is_set():
         try:
-            val = bus.read_byte(M5DIAL_ADDR)
-            if val == 1:
+            status = bus.read_byte(M5DIAL_ADDR)
+            if status == DIAL_START:
+                print("Startsignal vom M5Dial empfangen")
                 dial_queue.put("start")
-        except: pass
-        time.sleep(0.5)
+            else:
+                print(f"M5Dial Status: {status}")
+        except Exception as e:
+            print("Fehler beim Lesen vom M5Dial:", e)
+        time.sleep(1)
 
-def workerRobo(q, shutdown_event):
-    try:
-        while not shutdown_event.is_set():
-            if not q.empty():
-                cmd = q.get()
-                arduino.moveRobo(ROBO_ADDR, cmd)
-        time.sleep(0.05)
-    finally:
-        arduino.moveRobo(ROBO_ADDR, CMD_STOP)
+def workerDrehteller(queue, shutdown_event):
+    while not shutdown_event.is_set():
+        if not queue.empty():
+            cmd = queue.get()
+            arduino.moveRobo(TURNTABLE_ADDR, cmd)
+        time.sleep(0.1)
 
-def workerDrehteller(q, shutdown_event):
-    try:
-        while not shutdown_event.is_set():
-            if not q.empty():
-                cmd = q.get()
-                arduino.moveRobo(TURNTABLE_ADDR, cmd)
-        time.sleep(0.05)
-    finally:
-        arduino.moveRobo(TURNTABLE_ADDR, CMD_STOP)
+def workerRobo(queue, shutdown_event):
+    while not shutdown_event.is_set():
+        if not queue.empty():
+            cmd = queue.get()
+            arduino.moveRobo(ROBO_ADDR, cmd)
+        time.sleep(0.1)
 
-def workerSafety(shutdown_event):
+def workerSafety(shutdown_event, pause_flag):
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(NOTAUS_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     while not shutdown_event.is_set():
         if GPIO.input(NOTAUS_PIN) == GPIO.HIGH:
-            shutdown_event.set()
+            print("NOTAUS erkannt! System pausiert.")
+            pause_flag.value = True
         time.sleep(0.1)
     GPIO.cleanup(NOTAUS_PIN)
 
-def read_status(addr):
-    try:
-        return bus.read_byte(addr)
-    except:
-        return None
+def wait_for_response(addr, expected_response, label):
+    while True:
+        try:
+            r = bus.read_byte(addr)
+            if r == expected_response:
+                print(f"{label} abgeschlossen.")
+                return True
+            elif r == RESP_ERROR:
+                print(f"{label} meldet Fehler!")
+                return False
+        except:
+            pass
+        time.sleep(0.2)
 
-# --- Hauptprogramm ---
+def wait_until_resumed(pause_flag):
+    while pause_flag.value:
+        print("System pausiert... Warte auf CONTINUE (Taste oder I2C)")
+        try:
+            status = bus.read_byte(M5DIAL_ADDR)
+            if status == CMD_CONTINUE:
+                pause_flag.value = False
+                print("Fortsetzung bestätigt.")
+        except:
+            pass
+        time.sleep(0.5)
+
+# Initialisierung
 i2c.init_i2c()
 
 if __name__ == "__main__":
@@ -69,79 +102,58 @@ if __name__ == "__main__":
     shutdown_event = multiprocessing.Event()
 
     procs = [
-        multiprocessing.Process(target=workerDial, args=(dial_queue, shutdown_event)),
         multiprocessing.Process(target=workerRobo, args=(queue_robo, shutdown_event)),
         multiprocessing.Process(target=workerDrehteller, args=(queue_dreh, shutdown_event)),
-        multiprocessing.Process(target=workerSafety, args=(shutdown_event,))
+        multiprocessing.Process(target=workerDial, args=(dial_queue, shutdown_event)),
+        multiprocessing.Process(target=workerSafety, args=(shutdown_event, pause_flag))
     ]
 
     for p in procs:
         p.start()
 
     try:
-        state = "idle"
-        stueck = 1
-
         while not shutdown_event.is_set():
-            if state == "idle":
-                if not dial_queue.empty() and dial_queue.get() == "start":
-                    print("Produktionszyklus gestartet")
-                    stueck = 1
-                    state = "dial_info"
+            if not dial_queue.empty() and dial_queue.get() == "start":
+                print("→ Produktionsstart erkannt")
 
-            elif state == "dial_info":
-                try:
-                    bus.write_byte(M5DIAL_ADDR, 10 + stueck)
-                    state = "turn_asm"
+                for stueck in range(1, 11):
+                    print(f"Bearbeite Stück {stueck}...")
+                    wait_until_resumed(pause_flag)
+
+                    # Sende Stückzahl an M5Dial
+                    try:
+                        bus.write_byte(M5DIAL_ADDR, 10 + stueck)
+                    except Exception as e:
+                        print("Fehler beim Schreiben an M5Dial:", e)
+                        break
+
+                    # 1. ASM (30)
                     queue_dreh.put(TURN_MOVE_ASM)
-                    print(f"[{stueck}] → Drehteller ASM gestartet")
-                except:
-                    shutdown_event.set()
+                    if not wait_for_response(TURNTABLE_ADDR, RESP_DONE_TURN_ASM, "Drehteller ASM"):
+                        break
 
-            elif state == "turn_asm":
-                r = read_status(TURNTABLE_ADDR)
-                if r == RESP_DONE_TURN_ASM:
+                    wait_until_resumed(pause_flag)
+
+                    # 2. Roboter MOVE_A
                     queue_robo.put(ROBO_MOVE_A)
-                    print(f"[{stueck}] → Roboter MOVE_A gestartet")
-                    state = "robo"
+                    if not wait_for_response(ROBO_ADDR, RESP_DONE_ROBO_A, "Roboter MOVE_A"):
+                        break
 
-                elif r == RESP_ERROR:
-                    print("Fehler vom Drehteller bei ASM")
-                    shutdown_event.set()
+                    wait_until_resumed(pause_flag)
 
-            elif state == "robo":
-                r = read_status(ROBO_ADDR)
-                if r == RESP_DONE_ROBO_A:
+                    # 3. SND (40)
                     queue_dreh.put(TURN_MOVE_SND)
-                    print(f"[{stueck}] → Drehteller SND gestartet")
-                    state = "turn_snd"
+                    if not wait_for_response(TURNTABLE_ADDR, RESP_DONE_TURN_SND, "Drehteller SND"):
+                        break
 
-                elif r == RESP_ERROR:
-                    print("Fehler vom Roboter")
-                    shutdown_event.set()
-
-            elif state == "turn_snd":
-                r = read_status(TURNTABLE_ADDR)
-                if r == RESP_DONE_TURN_SND:
-                    print(f"[{stueck}] → Stück {stueck} abgeschlossen\n")
-                    stueck += 1
-                    if stueck > 10:
-                        print("Zyklus beendet.")
-                        state = "idle"
-                    else:
-                        state = "dial_info"
-
-                elif r == RESP_ERROR:
-                    print("Fehler vom Drehteller bei SND")
-                    shutdown_event.set()
-
-            time.sleep(0.1)
+            time.sleep(0.2)
 
     except KeyboardInterrupt:
         shutdown_event.set()
 
+    print("Beende Prozesse...")
     for p in procs:
         p.terminate()
     for p in procs:
         p.join()
-    print("System heruntergefahren.")
+    print("System vollständig heruntergefahren.")
