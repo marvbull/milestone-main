@@ -11,13 +11,11 @@ from constants import (
     ROBO_ADDR,
     M5DIAL_ADDR,
     ROBO_MOVE_A,
-    ROBO_MOVE_B,
     TURN_MOVE_ASM,
     TURN_MOVE_SND,
     CMD_CALIBRATE,
     CMD_STOP,
     RESP_DONE_ROBO_A,
-    RESP_DONE_ROBO_B,
     RESP_DONE_TURN_ASM,
     RESP_DONE_TURN_SND,
     RESP_ERROR
@@ -25,6 +23,8 @@ from constants import (
 
 bus = smbus.SMBus(1)
 NOTAUS_PIN = 17
+
+# --- Arbeiterprozesse ---
 
 def workerDial(dial_queue, shutdown_event):
     while not shutdown_event.is_set():
@@ -38,48 +38,47 @@ def workerDrehteller(queue, shutdown_event):
     try:
         while not shutdown_event.is_set():
             if not queue.empty():
-                befehl = queue.get()
-                print("Drehteller erhält Befehl:", befehl)
-                arduino.moveRobo(TURNTABLE_ADDR, befehl)
-                print("Drehteller-Befehl ausgeführt")
+                cmd = queue.get()
+                print("Drehteller erhält Befehl:", cmd)
+                arduino.moveRobo(TURNTABLE_ADDR, cmd)
             time.sleep(0.1)
     finally:
-        print("Not-Aus erkannt - sende STOP an Drehteller")
+        print("Stoppe Drehteller...")
         try:
             arduino.moveRobo(TURNTABLE_ADDR, CMD_STOP)
         except Exception as e:
-            print(f"Fehler beim STOP an Drehteller: {e}")
+            print("Fehler beim STOP an Drehteller:", e)
 
 def workerRobo(queue, shutdown_event):
     try:
         while not shutdown_event.is_set():
             if not queue.empty():
-                befehl = queue.get()
-                print("Roboterarm erhält Befehl:", befehl)
-                arduino.moveRobo(ROBO_ADDR, befehl)
-                print("Roboterarm-Befehl ausgeführt")
+                cmd = queue.get()
+                print("Roboter erhält Befehl:", cmd)
+                arduino.moveRobo(ROBO_ADDR, cmd)
             time.sleep(0.1)
     finally:
-        print("Not-Aus erkannt - sende STOP an Roboterarm")
+        print("Stoppe Roboterarm...")
         try:
             arduino.moveRobo(ROBO_ADDR, CMD_STOP)
         except Exception as e:
-            print(f"Fehler beim STOP an Roboterarm: {e}")
+            print("Fehler beim STOP an Roboterarm:", e)
 
 def workerSafety(shutdown_event):
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(NOTAUS_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     print("Überwache echten Not-Aus an GPIO17")
-
     try:
         while not shutdown_event.is_set():
             if GPIO.input(NOTAUS_PIN) == GPIO.HIGH:
-                print("Not-Aus AUSGELÖST (Taste gedrückt)")
+                print("NOT-AUS ausgelöst")
                 shutdown_event.set()
                 break
             time.sleep(0.1)
     finally:
         GPIO.cleanup(NOTAUS_PIN)
+
+# --- Hauptablauf ---
 
 i2c.init_i2c()
 
@@ -89,103 +88,88 @@ if __name__ == "__main__":
     dial_queue = multiprocessing.Queue()
     shutdown_event = multiprocessing.Event()
 
-    p_robo = multiprocessing.Process(target=workerRobo, args=(queue_robo, shutdown_event))
-    p_dreh = multiprocessing.Process(target=workerDrehteller, args=(queue_dreh, shutdown_event))
-    p_dial = multiprocessing.Process(target=workerDial, args=(dial_queue, shutdown_event))
-    p_safety = multiprocessing.Process(target=workerSafety, args=(shutdown_event,))
+    procs = [
+        multiprocessing.Process(target=workerRobo, args=(queue_robo, shutdown_event)),
+        multiprocessing.Process(target=workerDrehteller, args=(queue_dreh, shutdown_event)),
+        multiprocessing.Process(target=workerDial, args=(dial_queue, shutdown_event)),
+        multiprocessing.Process(target=workerSafety, args=(shutdown_event,))
+    ]
 
-    p_robo.start()
-    p_dreh.start()
-    p_dial.start()
-    p_safety.start()
+    for p in procs:
+        p.start()
 
     try:
         while not shutdown_event.is_set():
-            if not dial_queue.empty():
-                signal = dial_queue.get()
-                if signal == "start":
-                    print("Prozess gestartet")
+            if not dial_queue.empty() and dial_queue.get() == "start":
+                print("Produktionszyklus gestartet")
 
-                    for stueck in range(1, 11):
-                        print(f"Stückzahl {stueck} in Bearbeitung")
-                        i2c_command = 10 + stueck
+                for stueck in range(1, 11):
+                    print(f"Verarbeite Stück {stueck}...")
+
+                    try:
+                        bus.write_byte(M5DIAL_ADDR, 10 + stueck)
+                    except Exception as e:
+                        print("I2C Fehler M5Dial:", e)
+                        shutdown_event.set()
+                        break
+
+                    # Drehteller: Position ASM (30)
+                    queue_dreh.put(TURN_MOVE_ASM)
+                    while not shutdown_event.is_set():
                         try:
-                            bus.write_byte(M5DIAL_ADDR, i2c_command)
-                            print(f"I2C gesendet: {i2c_command} an {hex(M5DIAL_ADDR)}")
-                        except Exception as e:
-                            print(f"I2C-Sendefehler Stückzahl {stueck}: {e}")
-                            shutdown_event.set()
-                            break
+                            r = bus.read_byte(TURNTABLE_ADDR)
+                            if r == RESP_DONE_TURN_ASM:
+                                print("→ Drehteller ASM ok")
+                                break
+                            elif r == RESP_ERROR:
+                                print("Fehler vom Drehteller")
+                                shutdown_event.set()
+                                break
+                        except: pass
+                        time.sleep(0.2)
 
-                        queue_dreh.put(TURN_MOVE_ASM)
-                        print("Warte auf Rückmeldung vom Drehteller (ASM)...")
-                        while not shutdown_event.is_set():
-                            try:
-                                response = bus.read_byte(TURNTABLE_ADDR)
-                                if response == RESP_DONE_TURN_ASM:
-                                    print("Drehteller ASM abgeschlossen.")
-                                    break
-                                elif response == RESP_ERROR:
-                                    print("Fehler vom Drehteller!")
-                                    shutdown_event.set()
-                                    break
-                            except Exception as e:
-                                print(f"I2C-Lesefehler Drehteller: {e}")
-                            time.sleep(0.2)
+                    if shutdown_event.is_set(): break
 
-                        if shutdown_event.is_set(): break
+                    # Roboter: MOVE_A
+                    queue_robo.put(ROBO_MOVE_A)
+                    while not shutdown_event.is_set():
+                        try:
+                            r = bus.read_byte(ROBO_ADDR)
+                            if r == RESP_DONE_ROBO_A:
+                                print("→ Roboter MOVE_A ok")
+                                break
+                            elif r == RESP_ERROR:
+                                print("Fehler vom Roboter")
+                                shutdown_event.set()
+                                break
+                        except: pass
+                        time.sleep(0.2)
 
-                        queue_robo.put(ROBO_MOVE_A)
-                        print("Warte auf Rückmeldung vom Roboter...")
-                        while not shutdown_event.is_set():
-                            try:
-                                response = bus.read_byte(ROBO_ADDR)
-                                if response == RESP_DONE_ROBO_A:
-                                    print("Roboter MOVE_A abgeschlossen.")
-                                    break
-                                elif response == RESP_ERROR:
-                                    print("Fehler vom Roboter!")
-                                    shutdown_event.set()
-                                    break
-                            except Exception as e:
-                                print(f"I2C-Lesefehler Roboter: {e}")
-                            time.sleep(0.2)
+                    if shutdown_event.is_set(): break
 
-                        if shutdown_event.is_set(): break
-
-                        queue_dreh.put(TURN_MOVE_SND)
-                        print("TURN_MOVE_SND an Drehteller gesendet. Warte auf Bestätigung...")
-                        while not shutdown_event.is_set():
-                            try:
-                                response = bus.read_byte(TURNTABLE_ADDR)
-                                if response == RESP_DONE_TURN_SND:
-                                    print("Drehteller meldet SND abgeschlossen.")
-                                    break
-                                elif response == RESP_ERROR:
-                                    print("Fehler beim SND vom Drehteller!")
-                                    shutdown_event.set()
-                                    break
-                            except Exception as e:
-                                print(f"I2C-Lesefehler Drehteller (SND): {e}")
-                            time.sleep(0.2)
-
-                        if shutdown_event.is_set(): break
+                    # Drehteller: Position SND (40)
+                    queue_dreh.put(TURN_MOVE_SND)
+                    while not shutdown_event.is_set():
+                        try:
+                            r = bus.read_byte(TURNTABLE_ADDR)
+                            if r == RESP_DONE_TURN_SND:
+                                print("→ Drehteller SND ok")
+                                break
+                            elif r == RESP_ERROR:
+                                print("Fehler vom Drehteller")
+                                shutdown_event.set()
+                                break
+                        except: pass
+                        time.sleep(0.2)
 
             time.sleep(0.2)
 
     except KeyboardInterrupt:
         shutdown_event.set()
 
-    print("Stoppe alle Prozesse...")
-
-    p_robo.terminate()
-    p_dreh.terminate()
-    p_dial.terminate()
-    p_safety.terminate()
-
-    p_robo.join()
-    p_dreh.join()
-    p_dial.join()
-    p_safety.join()
-
-    print("System beendet.")
+    print("Beende Prozesse...")
+    for p in procs:
+        p.terminate()
+    for p in procs:
+        p.join()
+    print("System heruntergefahren.")
