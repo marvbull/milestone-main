@@ -28,11 +28,16 @@ NOTAUS_PIN = 17
 
 def workerDial(dial_queue, shutdown_event):
     while not shutdown_event.is_set():
-        print("Warte auf Startsignal vom M5Dial")
-        time.sleep(5)
-        print("Startsignal empfangen")
-        dial_queue.put("start")
-        time.sleep(10)
+        try:
+            response = bus.read_byte(M5DIAL_ADDR)
+            if response == 1:
+                print("Startsignal empfangen vom M5Dial")
+                dial_queue.put("start")
+            else:
+                print("M5Dial meldet: bereit (Status 0)")
+        except Exception as e:
+            print("Fehler beim Lesen vom M5Dial:", e)
+        time.sleep(1)
 
 def workerDrehteller(queue, shutdown_event):
     try:
@@ -126,7 +131,7 @@ if __name__ == "__main__":
                                 shutdown_event.set()
                                 break
                         except: pass
-                        time.sleep(0.2)
+                        time.sleep(20)
 
                     if shutdown_event.is_set(): break
 
@@ -143,7 +148,7 @@ if __name__ == "__main__":
                                 shutdown_event.set()
                                 break
                         except: pass
-                        time.sleep(0.2)
+                        time.sleep(20)
 
                     if shutdown_event.is_set(): break
 
@@ -160,9 +165,9 @@ if __name__ == "__main__":
                                 shutdown_event.set()
                                 break
                         except: pass
-                        time.sleep(0.2)
+                        time.sleep(20)
 
-            time.sleep(0.2)
+            time.sleep(20)
 
     except KeyboardInterrupt:
         shutdown_event.set()
