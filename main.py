@@ -25,6 +25,7 @@ NOTAUS_PIN = 17
 bus = smbus.SMBus(1)
 
 pause_flag = threading.Event()
+start_flag = threading.Event()
 bus_lock = threading.Lock()
 
 def init_gpio():
@@ -65,18 +66,26 @@ def monitor_m5dial():
         try:
             with bus_lock:
                 status = bus.read_byte(M5DIAL_ADDR)
+
             if status == DIAL_STOP and not pause_flag.is_set():
                 print("[M5Dial] STOP erkannt – pausiere System")
                 pause_flag.set()
                 send_command(ROBO_ADDR, CMD_STOP, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_STOP, "Drehteller")
+
             elif status == CMD_CONTINUE and pause_flag.is_set():
                 print("[M5Dial] CONTINUE erkannt – fortsetzen")
                 pause_flag.clear()
                 send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
-        except:
-            pass
+
+            elif status == DIAL_START and not start_flag.is_set():
+                print("[M5Dial] START erkannt – Ablauf starten")
+                start_flag.set()
+
+        except Exception as e:
+            print("[M5Dial] Fehler:", e)
+
         time.sleep(0.5)
 
 def monitor_console():
@@ -118,10 +127,9 @@ def main():
 
     while True:
         try:
-            with bus_lock:
-                status = bus.read_byte(M5DIAL_ADDR)
-            if status == DIAL_START and not pause_flag.is_set():
-                print("[System] Start erkannt – beginne Ablauf")
+            if start_flag.is_set() and not pause_flag.is_set():
+                print("[System] Ablauf beginnt...")
+                start_flag.clear()
 
                 for stueck in range(1, 11):
                     if pause_flag.is_set(): break
