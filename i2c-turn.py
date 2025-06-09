@@ -1,7 +1,7 @@
 import smbus
 import time
 
-I2C_ADDR = 0x09  # I2C-Adresse des Arduino
+I2C_ADDR = 0x09
 bus = smbus.SMBus(1)
 
 def send_command(value):
@@ -29,8 +29,13 @@ def main():
             byte_value = int(value)
             if 0 <= byte_value <= 255:
                 send_command(byte_value)
-                time.sleep(0.5)
-                request_status()
+                
+                # Status alle 2 Sekunden abfragen, bis 125 zurückkommt
+                while True:
+                    time.sleep(2)
+                    status = request_status()
+                    if status == 125:
+                        break
             else:
                 print("! Wert außerhalb [0–255]")
         except ValueError:
