@@ -100,7 +100,7 @@ def monitor_console():
             print("[Console] CONTINUE erkannt")
             pause_flag.clear()
             send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
-            send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
+            send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")S
         elif cmd == "cal":
             print("[Console] KALIBRIERUNG")
             send_command(ROBO_ADDR, CMD_CAL, "Roboter")
