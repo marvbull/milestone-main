@@ -31,6 +31,11 @@ pause_flag = multiprocessing.Value('b', False)
 
 def workerDial(dial_queue, shutdown_event):
     while not shutdown_event.is_set():
+            if pause_flag.value:
+                print("Pause aktiv – warte auf CONTINUE...")
+                time.sleep(1)
+                continue
+
         try:
             status = bus.read_byte(M5DIAL_ADDR)
             if status == DIAL_START:
@@ -44,6 +49,11 @@ def workerDial(dial_queue, shutdown_event):
 
 def workerDrehteller(queue, shutdown_event):
     while not shutdown_event.is_set():
+            if pause_flag.value:
+                print("Pause aktiv – warte auf CONTINUE...")
+                time.sleep(1)
+                continue
+
         if not queue.empty():
             cmd = queue.get()
             arduino.moveRobo(TURNTABLE_ADDR, cmd)
@@ -51,6 +61,11 @@ def workerDrehteller(queue, shutdown_event):
 
 def workerRobo(queue, shutdown_event):
     while not shutdown_event.is_set():
+            if pause_flag.value:
+                print("Pause aktiv – warte auf CONTINUE...")
+                time.sleep(1)
+                continue
+
         if not queue.empty():
             cmd = queue.get()
             arduino.moveRobo(ROBO_ADDR, cmd)
@@ -60,6 +75,11 @@ def workerSafety(shutdown_event, pause_flag):
     GPIO.setmode(GPIO.BCM)
     GPIO.setup(NOTAUS_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
     while not shutdown_event.is_set():
+            if pause_flag.value:
+                print("Pause aktiv – warte auf CONTINUE...")
+                time.sleep(1)
+                continue
+
         if GPIO.input(NOTAUS_PIN) == GPIO.HIGH:
             print("NOTAUS erkannt! System pausiert.")
             pause_flag.value = True
@@ -95,6 +115,24 @@ def wait_until_resumed(pause_flag):
 # Initialisierung
 i2c.init_i2c()
 
+
+GPIO.setmode(GPIO.BCM)
+GPIO.setup(NOTAUS_PIN, GPIO.IN, pull_up_down=GPIO.PUD_DOWN)
+print("Überprüfe Not-Aus beim Start...")
+
+if GPIO.input(NOTAUS_PIN) == GPIO.HIGH:
+    print("NOT-AUS ist AKTIV – starte im PAUSE-Modus")
+    pause_flag.value = True
+else:
+    print("NOT-AUS nicht aktiv – sende CONTINUE an Geräte")
+    try:
+        arduino.moveRobo(ROBO_ADDR, CMD_CONTINUE)
+        arduino.moveRobo(TURNTABLE_ADDR, CMD_CONTINUE)
+    except Exception as e:
+        print("Fehler beim CONTINUE-Senden:", e)
+    pause_flag.value = False
+
+
 if __name__ == "__main__":
     queue_robo = multiprocessing.Queue()
     queue_dreh = multiprocessing.Queue()
@@ -113,6 +151,11 @@ if __name__ == "__main__":
 
     try:
         while not shutdown_event.is_set():
+            if pause_flag.value:
+                print("Pause aktiv – warte auf CONTINUE...")
+                time.sleep(1)
+                continue
+
             if not dial_queue.empty() and dial_queue.get() == "start":
                 print("→ Produktionsstart erkannt")
 
@@ -157,3 +200,22 @@ if __name__ == "__main__":
     for p in procs:
         p.join()
     print("System vollständig heruntergefahren.")
+
+
+
+def workerControl(bus, pause_flag, shutdown_event):
+    while not shutdown_event.is_set():
+        try:
+            for addr in [ROBO_ADDR, TURNTABLE_ADDR]:
+                try:
+                    value = bus.read_byte(addr)
+                    if value == CMD_STOP:
+                        print(f"STOP erkannt von Adresse {hex(addr)} – Pause aktiviert")
+                        pause_flag.value = True
+                    elif value == CMD_CONTINUE:
+                        print(f"CONTINUE erkannt von Adresse {hex(addr)} – Pause beendet")
+                        pause_flag.value = False
+                except: pass
+            time.sleep(0.5)
+        except Exception as e:
+            print("Fehler im Control-Worker:", e)
