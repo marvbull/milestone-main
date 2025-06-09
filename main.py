@@ -20,7 +20,7 @@ CMD_CAL = 90
 # Signale vom M5Dial
 DIAL_START = 1
 DIAL_STOP = 2
-DIAL_CONTINUE = 3  # Antwort an M5Dial zur Bestätigung
+DIAL_CONTINUE = 3  # Antwort vom M5Dial (z. B. für "weiter")
 
 # Status-Rückmeldungen
 DONE_1 = 105
@@ -82,8 +82,8 @@ def monitor_m5dial():
                 send_command(TURNTABLE_ADDR, CMD_STOP, "Drehteller")
                 send_command(M5DIAL_ADDR, DIAL_CONTINUE, "M5Dial (Bestätigung)")
 
-            elif status == CMD_CONTINUE and pause_flag.is_set():
-                print("[M5Dial] CONTINUE erkannt – fortsetzen")
+            elif status == DIAL_CONTINUE and pause_flag.is_set():
+                print("[M5Dial] DIAL_CONTINUE erkannt – sende CONTINUE an Geräte")
                 pause_flag.clear()
                 send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
