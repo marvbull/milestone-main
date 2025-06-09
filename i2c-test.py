@@ -1,47 +1,35 @@
-from smbus2 import SMBus
+import smbus
 import time
 
-I2C_ADDR = 0x09  # Arduino I2C-Adresse
+I2C_ADDR = 0x08  # Adresse des Arduino
+bus = smbus.SMBus(1)  # SMBus 1 für Raspberry Pi
 
-# Befehle als Bytewerte
-commands = {
-    "moveasm": 30,
-    "movesnd": 40,
-    "movecal": 90,
-    "movetest": 3,
-    "stop": 99,
-    "continue": 98
-}
-
-def send_command(bus, cmd_byte):
+def send_command(cmd):
     try:
-        bus.write_byte(I2C_ADDR, cmd_byte)
-        print(f"Befehl {cmd_byte} gesendet.")
-    except Exception as e:
-        print(f"Fehler beim Senden: {e}")
-
-def read_status(bus):
-    try:
+        print(f"Sende I2C-Befehl: {cmd}")
+        bus.write_byte(I2C_ADDR, cmd)
+        time.sleep(0.1)
         response = bus.read_byte(I2C_ADDR)
-        print(f"Empfangener Status vom Arduino: {response}")
+        print(f"Antwort vom Arduino: {response}")
     except Exception as e:
-        print(f"Fehler beim Lesen: {e}")
+        print(f"Fehler bei I2C: {e}")
 
 def main():
-    with SMBus(1) as bus:
-        print("I2C-Terminal gestartet. Eingabe: moveasm / movesnd / movecal / movetest / stop / continue / status / exit")
-        while True:
-            user_input = input(">> ").strip().lower()
-            if user_input == "exit":
+    print("Gib eine Zahl von 10–19 ein (Band 1–10).")
+    print("Oder andere bekannte Kommandos wie 2 (moveB), 30 (moveTest).")
+
+    while True:
+        try:
+            raw_input = input("Befehl senden (q zum Beenden): ").strip()
+            if raw_input.lower() == "q":
                 break
-            elif user_input == "status":
-                read_status(bus)
-            elif user_input in commands:
-                send_command(bus, commands[user_input])
-            elif user_input.isdigit():
-                send_command(bus, int(user_input))
-            else:
-                print("Ungültiger Befehl.")
+            cmd = int(raw_input)
+            send_command(cmd)
+        except ValueError:
+            print("Ungültige Eingabe. Bitte eine Zahl eingeben.")
+        except KeyboardInterrupt:
+            print("\nBeendet.")
+            break
 
 if __name__ == "__main__":
     main()
