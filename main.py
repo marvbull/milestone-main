@@ -1,37 +1,29 @@
-#!/usr/bin/env python3
 import smbus
 import time
 import RPi.GPIO as GPIO
 import threading
 
-# I2C-Adressen
+# Konstanten
 TURNTABLE_ADDR = 0x09
 ROBO_ADDR = 0x08
 M5DIAL_ADDR = 0x10
 
-# Befehle an Roboter/Drehteller
 TURN_MOVE_ASM = 30
 TURN_MOVE_SND = 40
 ROBO_MOVE_A = 10
+
 CMD_CONTINUE = 98
 CMD_STOP = 99
 CMD_CAL = 90
-
-# Signale vom M5Dial
 DIAL_START = 1
 DIAL_STOP = 2
-DIAL_CONTINUE = 3  # Antwort an M5Dial zur Bestätigung
-
-# Status-Rückmeldungen
 DONE_1 = 105
 DONE_2 = 115
 DONE_3 = 125
 
-# GPIO
 NOTAUS_PIN = 17
 bus = smbus.SMBus(1)
 
-# Steuer-Flags
 pause_flag = threading.Event()
 start_flag = threading.Event()
 bus_lock = threading.Lock()
@@ -80,7 +72,6 @@ def monitor_m5dial():
                 pause_flag.set()
                 send_command(ROBO_ADDR, CMD_STOP, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_STOP, "Drehteller")
-                send_command(M5DIAL_ADDR, DIAL_CONTINUE, "M5Dial (Bestätigung)")
 
             elif status == CMD_CONTINUE and pause_flag.is_set():
                 print("[M5Dial] CONTINUE erkannt – fortsetzen")
