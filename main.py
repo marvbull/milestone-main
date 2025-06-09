@@ -8,14 +8,12 @@ import arduino
 from constants import (
     TURNTABLE_ADDR,
     ROBO_ADDR,
-    M5DIAL_ADDR,
     ROBO_MOVE_A,
     TURN_MOVE_ASM,
     TURN_MOVE_SND,
     CMD_CALIBRATE,
     CMD_STOP,
     CMD_CONTINUE,
-    DIAL_START,
     RESP_DONE_ROBO_A,
     RESP_DONE_TURN_ASM,
     RESP_DONE_TURN_SND,
@@ -27,22 +25,6 @@ from constants import (
 bus = smbus.SMBus(1)
 NOTAUS_PIN = 17
 pause_flag = multiprocessing.Value('b', False)
-
-def workerDial(dial_queue, shutdown_event):
-    while not shutdown_event.is_set():
-        if pause_flag.value:
-            time.sleep(1)
-            continue
-        try:
-            status = bus.read_byte(M5DIAL_ADDR)
-            if status == DIAL_START:
-                print("[M5Dial] Startsignal empfangen")
-                dial_queue.put("start")
-            else:
-                print(f"[M5Dial] Status: {status}")
-        except Exception as e:
-            print("[M5Dial] Fehler beim Lesen:", e)
-        time.sleep(1)
 
 def workerDrehteller(queue, shutdown_event):
     while not shutdown_event.is_set():
@@ -97,13 +79,6 @@ def wait_for_response(addr, expected_response, label):
 def wait_until_resumed():
     while pause_flag.value:
         print("[System] Pause aktiv... warte auf CONTINUE")
-        try:
-            status = bus.read_byte(M5DIAL_ADDR)
-            if status == CMD_CONTINUE:
-                pause_flag.value = False
-                print("[System] Fortsetzung erkannt")
-        except:
-            pass
         time.sleep(0.5)
 
 def init_safety():
@@ -127,13 +102,11 @@ def main():
 
     queue_robo = multiprocessing.Queue()
     queue_dreh = multiprocessing.Queue()
-    dial_queue = multiprocessing.Queue()
     shutdown_event = multiprocessing.Event()
 
     procs = [
         multiprocessing.Process(target=workerRobo, args=(queue_robo, shutdown_event)),
         multiprocessing.Process(target=workerDrehteller, args=(queue_dreh, shutdown_event)),
-        multiprocessing.Process(target=workerDial, args=(dial_queue, shutdown_event)),
         multiprocessing.Process(target=workerSafety, args=(shutdown_event, pause_flag))
     ]
 
@@ -146,31 +119,37 @@ def main():
                 time.sleep(1)
                 continue
 
-            if not dial_queue.empty() and dial_queue.get() == "start":
+            user_input = input("[System] Eingabe (start/stop/exit): ").strip().lower()
+
+            if user_input == "start":
                 print("[System] → Produktionsstart erkannt")
 
                 for stueck in range(1, 11):
                     print(f"[System] Bearbeite Stück {stueck}...")
                     wait_until_resumed()
 
-                    # 1. ASM
                     queue_dreh.put(TURN_MOVE_ASM)
                     if not wait_for_response(TURNTABLE_ADDR, RESP_DONE_TURN_ASM, "Drehteller ASM"):
                         break
 
                     wait_until_resumed()
 
-                    # 2. Roboter
                     queue_robo.put(ROBO_MOVE_A)
                     if not wait_for_response(ROBO_ADDR, RESP_DONE_ROBO_A, "Roboter MOVE_A"):
                         break
 
                     wait_until_resumed()
 
-                    # 3. SND
                     queue_dreh.put(TURN_MOVE_SND)
                     if not wait_for_response(TURNTABLE_ADDR, RESP_DONE_TURN_SND, "Drehteller SND"):
                         break
+
+            elif user_input == "stop":
+                pause_flag.value = True
+                print("[System] Manuell pausiert")
+
+            elif user_input == "exit":
+                shutdown_event.set()
 
             time.sleep(0.2)
 
@@ -186,3 +165,6 @@ def main():
 
 if __name__ == "__main__":
     main()
+    GPIO.cleanup()
+    
+    
