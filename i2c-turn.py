@@ -2,51 +2,39 @@ import smbus
 import time
 
 I2C_ADDR = 0x09  # I2C-Adresse des Arduino
-bus = smbus.SMBus(1)  # I2C-Bus des Raspberry Pi
+bus = smbus.SMBus(1)
 
 def send_command(value):
     try:
         bus.write_byte(I2C_ADDR, value)
-        print(f"→ Befehl gesendet: {value}")
+        print(f"→ {value}")
     except Exception as e:
-        print(f"Fehler beim Senden: {e}")
+        print(f"! {e}")
 
 def request_status():
     try:
         status = bus.read_byte(I2C_ADDR)
-        print(f"← Status vom Arduino: {status}")
+        print(f"← {status}")
         return status
     except Exception as e:
-        print(f"Fehler beim Empfangen: {e}")
+        print(f"! {e}")
         return -1
 
 def main():
-    print("I²C-Steuerung bereit.")
-    print("Befehle: cal, asm, snd, stop, cont, status, exit")
-
     while True:
-        cmd = input(">>> ").strip().lower()
-
-        if cmd == "cal":
-            send_command(90)
-        elif cmd == "asm":
-            send_command(30)
-        elif cmd == "snd":
-            send_command(40)
-        elif cmd == "stop":
-            send_command(99)
-        elif cmd == "cont":
-            send_command(98)
-        elif cmd == "status":
-            request_status()
-        elif cmd == "exit":
-            break
-        else:
-            print("Unbekannter Befehl.")
-
-        # Automatisch Rückmeldung abfragen
-        time.sleep(0.5)
-        request_status()
+        try:
+            value = input(">>> ").strip()
+            if value == "exit":
+                break
+            byte_value = int(value)
+            if 0 <= byte_value <= 255:
+                send_command(byte_value)
+                time.sleep(0.5)
+                request_status()
+            else:
+                print("! Wert außerhalb [0–255]")
+        except ValueError:
+            print("! Ungültige Eingabe")
 
 if __name__ == "__main__":
     main()
