@@ -76,20 +76,17 @@ def monitor_m5dial():
                 status = bus.read_byte(M5DIAL_ADDR)
 
             if status == DIAL_STOP and not pause_flag.is_set():
-                print("[M5Dial] STOP erkannt – pausiere System")
+                print("[M5Dial] NOT-AUS erkannt – pausiere System")
                 pause_flag.set()
                 send_command(ROBO_ADDR, CMD_STOP, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_STOP, "Drehteller")
-                send_command(M5DIAL_ADDR, DIAL_CONTINUE, "M5Dial (Bestätigung)")
+                send_command(M5DIAL_ADDR, CMD_CONTINUE, "M5Dial (zeige Quittierung)")  # 98 = zeige Popup
 
             elif status == DIAL_CONTINUE and pause_flag.is_set():
-                print("[M5Dial] DIAL_CONTINUE erkannt – sende CONTINUE an Geräte")
+                print("[M5Dial] Quittierung erkannt – sende CONTINUE an Geräte")
                 pause_flag.clear()
                 send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
                 send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
-                time.sleep(1)
-                send_command(ROBO_ADDR, CMD_CAL, "Roboter")
-                send_command(TURNTABLE_ADDR, CMD_CAL, "Drehteller")
 
             elif status == DIAL_START and not start_flag.is_set():
                 print("[M5Dial] START erkannt – Ablauf starten")
@@ -121,18 +118,14 @@ def monitor_console():
             print("[Console] Unbekannter Befehl:", cmd)
 
 def main():
-    init_gpio()
-
-    if is_notaus_active():
-        print("[Init] NOT-AUS aktiv – warte auf CONTINUE")
-        pause_flag.set()
-    else:
-        print("[Init] NOT-AUS nicht aktiv – sende CONTINUE")
-        send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
-        send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
-        time.sleep(1)
-        send_command(ROBO_ADDR, CMD_CAL, "Roboter")
-        send_command(TURNTABLE_ADDR, CMD_CAL, "Drehteller")
+    print("[Init] Sende CONTINUE und führe Kalibrierung durch")
+    send_command(ROBO_ADDR, CMD_CONTINUE, "Roboter")
+    send_command(TURNTABLE_ADDR, CMD_CONTINUE, "Drehteller")
+    time.sleep(1)
+    send_command(ROBO_ADDR, CMD_CAL, "Roboter")
+    send_command(TURNTABLE_ADDR, CMD_CAL, "Drehteller")
+    time.sleep(3)
+    send_command(ROBO_ADDR, 20, "Roboter")
 
     # Hintergrundthreads starten
     threading.Thread(target=monitor_m5dial, daemon=True).start()
