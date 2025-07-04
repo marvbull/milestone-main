@@ -1,4 +1,4 @@
-# 🛠️ milestone-main
+# 🛠️ Assembly Station and Promotional gift
 
 ## 📖 Project Overview
 
